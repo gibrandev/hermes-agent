@@ -264,7 +264,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from gateway.config import Platform, PlatformConfig
 from gateway.platforms.whatsapp_common import WhatsAppBehaviorMixin
-from gateway.whatsapp_identity import to_whatsapp_jid
+from gateway.whatsapp_identity import normalize_whatsapp_identifier, to_whatsapp_jid
 from gateway.platforms.base import (
     BasePlatformAdapter,
     MessageEvent,
@@ -1365,6 +1365,20 @@ class WhatsAppAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
                 user_id=data.get("senderId"),
                 user_name=data.get("senderName"),
             )
+            # Surface the sender's real phone number even when WhatsApp addresses
+            # them by LID (``senderId`` is then "<lid>@lid", not a number). The
+            # bridge resolves the PN and sends it as ``senderPn`` (bare digits);
+            # normalize defensively in case a JID form slips through. Falls back
+            # to the senderId only when it is itself a phone JID, never a LID.
+            _sender_pn = str(data.get("senderPn") or "").strip()
+            if not _sender_pn:
+                _sid = str(data.get("senderId") or "")
+                if _sid and "@lid" not in _sid:
+                    _sender_pn = _sid
+            if _sender_pn:
+                _phone = normalize_whatsapp_identifier(_sender_pn)
+                if _phone and _phone.isdigit():
+                    source.user_phone = _phone
             
             # Download media URLs to the local cache so agent tools
             # can access them reliably regardless of URL expiration.

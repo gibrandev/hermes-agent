@@ -301,6 +301,7 @@ export async function extractBridgeEvent({
   chatId,
   senderId,
   senderNumber,
+  senderPn = '',
   botIds = [],
   isGroup = false,
   downloadMedia,
@@ -465,6 +466,11 @@ export async function extractBridgeEvent({
     messageId: msg.key.id,
     chatId,
     senderId,
+    // Phone-number (PN) form of the sender, resolved even when WhatsApp
+    // addresses them by LID (so senderId is "<lid>@lid"). Empty when the
+    // number can't be resolved. Consumed by the Python adapter to expose the
+    // real MSISDN downstream.
+    senderPn,
     senderName: msg.pushName || senderNumber,
     chatName: isGroup ? (chatId.split('@')[0]) : (msg.pushName || senderNumber),
     isGroup,

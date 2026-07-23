@@ -20904,15 +20904,22 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
             # the current sender rather than whoever first created it.
             agent._api_end_user_id = None
             if (os.environ.get("HERMES_LLM_INCLUDE_USER_ID") or "").strip().lower() in {"1", "true", "yes"}:
-                _end_user_id = source.user_id
-                if _end_user_id and platform_key == "whatsapp":
-                    try:
-                        from gateway.whatsapp_identity import (
-                            normalize_whatsapp_identifier,
-                        )
-                        _end_user_id = normalize_whatsapp_identifier(_end_user_id)
-                    except Exception:
-                        pass
+                # Prefer a resolved phone number (WhatsApp sets source.user_phone
+                # even when the sender is LID-addressed). Fall back to user_id,
+                # normalizing a WhatsApp JID to its bare numeric core — though for
+                # a LID sender that yields the LID digits, not a phone, so the
+                # phone path above is what makes the payload carry a real number.
+                _end_user_id = source.user_phone
+                if not _end_user_id:
+                    _end_user_id = source.user_id
+                    if _end_user_id and platform_key == "whatsapp":
+                        try:
+                            from gateway.whatsapp_identity import (
+                                normalize_whatsapp_identifier,
+                            )
+                            _end_user_id = normalize_whatsapp_identifier(_end_user_id)
+                        except Exception:
+                            pass
                 agent._api_end_user_id = _end_user_id or None
             # Must-deliver notes for THIS turn ride the current user message
             # (api_content sidecar), never the system prompt: staged by

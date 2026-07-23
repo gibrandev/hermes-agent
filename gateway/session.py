@@ -164,6 +164,12 @@ class SessionSource:
     thread_id: Optional[str] = None  # For forum topics, Discord threads, etc.
     chat_topic: Optional[str] = None  # Channel topic/description (Discord, Slack)
     user_id_alt: Optional[str] = None  # Platform-specific stable alt ID (Signal UUID, Feishu union_id)
+    # Sender's phone number in bare-MSISDN form (e.g. "628123456789"), when the
+    # platform can resolve one. WhatsApp populates this from the bridge's PN
+    # resolution so downstream consumers get the real number even when the
+    # sender is addressed by LID (where user_id is a "<lid>@lid" identifier, not
+    # a phone). None on platforms/senders without a phone number.
+    user_phone: Optional[str] = None
     chat_id_alt: Optional[str] = None  # Signal group internal ID
     is_bot: bool = False  # True when the message author is a bot/webhook (Discord)
     # Platform-neutral SCOPE discriminator (Discord guild / Slack workspace /
@@ -248,6 +254,8 @@ class SessionSource:
         }
         if self.user_id_alt:
             d["user_id_alt"] = self.user_id_alt
+        if self.user_phone:
+            d["user_phone"] = self.user_phone
         if self.chat_id_alt:
             d["chat_id_alt"] = self.chat_id_alt
         # D-Q2.5 dual-write: emit BOTH the canonical `scope_id` and the
@@ -282,6 +290,7 @@ class SessionSource:
             thread_id=data.get("thread_id"),
             chat_topic=data.get("chat_topic"),
             user_id_alt=data.get("user_id_alt"),
+            user_phone=data.get("user_phone"),
             chat_id_alt=data.get("chat_id_alt"),
             # D-Q2.5 dual-read: prefer the canonical `scope_id`, fall back to the
             # deprecated `guild_id` alias (a peer not yet migrated still sends it).

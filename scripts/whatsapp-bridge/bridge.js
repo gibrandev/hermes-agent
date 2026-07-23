@@ -256,6 +256,44 @@ function buildLidMap() {
 }
 let lidToPhone = buildLidMap();
 
+// Resolve a sender's phone number (bare digits, no @domain) even when
+// WhatsApp addressed them by LID (senderId ends in "@lid"). Layered so it
+// degrades gracefully across Baileys builds and session state:
+//   1. The PN alias Baileys attaches to the message key (senderPn for DMs,
+//      participantPn for group members).
+//   2. The socket's LID→PN mapping store (getPNForLID).
+//   3. The reverse of the on-disk lid-mapping-{phone}.json files.
+// Returns '' when the number genuinely can't be resolved (LID is designed to
+// hide it — e.g. a first-contact sender before any mapping is learned).
+async function resolveSenderPn(msg, senderId, isGroup, sock) {
+  const bare = (v) => String(v || '').replace(/:.*@/, '@').replace(/@.*/, '');
+  try {
+    // 1. PN alias on the message key.
+    const keyPn = isGroup ? msg?.key?.participantPn : msg?.key?.senderPn;
+    if (keyPn) return bare(keyPn);
+
+    // If the sender isn't LID-addressed, senderId already IS the phone JID.
+    if (!String(senderId).includes('@lid')) {
+      const digits = bare(senderId);
+      return /^\d+$/.test(digits) ? digits : '';
+    }
+
+    // 2. Ask the LID mapping store (sync or async depending on build).
+    const store = sock?.signalRepository?.lidMapping;
+    if (store && typeof store.getPNForLID === 'function') {
+      const pn = await store.getPNForLID(senderId);
+      if (pn) return bare(pn);
+    }
+
+    // 3. Reverse the file-backed map built at startup / creds.update.
+    const lidDigits = bare(senderId);
+    if (lidToPhone[lidDigits]) return bare(lidToPhone[lidDigits]);
+  } catch (err) {
+    try { console.warn('[bridge] resolveSenderPn failed:', err?.message || err); } catch {}
+  }
+  return '';
+}
+
 const logger = pino({ level: 'warn' });
 
 // Message queue for polling
@@ -534,6 +572,7 @@ async function startSocket() {
       const senderId = msg.key.participant || chatId;
       const isGroup = chatId.endsWith('@g.us');
       const senderNumber = senderId.replace(/@.*/, '');
+      const senderPn = await resolveSenderPn(msg, senderId, isGroup, sock);
       emitDebugEvent({
         stage: 'upsert',
         type,
@@ -712,6 +751,7 @@ async function startSocket() {
         chatId,
         senderId,
         senderNumber,
+        senderPn,
         botIds,
         isGroup,
         downloadMedia: async (mediaMsg) => downloadMediaMessage(mediaMsg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage }),
