@@ -1184,6 +1184,7 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
             session_id=getattr(agent, "session_id", None),
             provider_profile=_profile,
             ollama_num_ctx=agent._ollama_num_ctx,
+            user=getattr(agent, "_api_end_user_id", None),
             # Context forwarded to profile hooks:
             provider_preferences=_prefs or None,
             openrouter_min_coding_score=agent.openrouter_min_coding_score,
@@ -1214,6 +1215,7 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
         reasoning_config=agent.reasoning_config,
         request_overrides=agent.request_overrides,
         session_id=getattr(agent, "session_id", None),
+        user=getattr(agent, "_api_end_user_id", None),
         model_lower=(agent.model or "").lower(),
         is_openrouter=_is_or,
         is_nous=_is_nous,

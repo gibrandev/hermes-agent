@@ -509,6 +509,13 @@ class ChatCompletionsTransport(ProviderTransport):
         if overrides:
             api_kwargs.update(overrides)
 
+        # End-user identifier (OpenAI ``user`` field). Populated per-turn by
+        # the gateway (opt-in) with the sender's stable id — for WhatsApp, the
+        # bare phone number — so a self-hosted backend can read request.user.
+        user = params.get("user")
+        if user:
+            api_kwargs["user"] = user
+
         return api_kwargs
 
     def _build_kwargs_from_profile(self, profile, model, sanitized, tools, params):
@@ -650,6 +657,11 @@ class ChatCompletionsTransport(ProviderTransport):
                 }
             if extra_body:
                 api_kwargs["extra_body"] = extra_body
+
+        # End-user identifier (OpenAI ``user`` field) — see build_kwargs.
+        user = params.get("user")
+        if user:
+            api_kwargs["user"] = user
 
         return api_kwargs
 

@@ -20892,6 +20892,28 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
             agent.reasoning_config = reasoning_config
             agent.service_tier = self._service_tier
             agent.request_overrides = turn_route.get("request_overrides") or {}
+            # End-user identity for the LLM request body (the chat_completions
+            # ``user`` field). Opt-in via HERMES_LLM_INCLUDE_USER_ID: it forwards
+            # a real end-user identifier — for WhatsApp, the sender's phone
+            # number — to the model provider. A self-hosted AI backend wants
+            # this, but a third-party provider (OpenRouter, etc.) should not
+            # receive PII by default, hence the flag. WhatsApp senderId is a JID
+            # ("628xxx@s.whatsapp.net"); normalize to the bare MSISDN so the
+            # backend reads ``request.user`` as a plain number. Assigned every
+            # turn (never baked into the cached agent) so a reused agent tracks
+            # the current sender rather than whoever first created it.
+            agent._api_end_user_id = None
+            if (os.environ.get("HERMES_LLM_INCLUDE_USER_ID") or "").strip().lower() in {"1", "true", "yes"}:
+                _end_user_id = source.user_id
+                if _end_user_id and platform_key == "whatsapp":
+                    try:
+                        from gateway.whatsapp_identity import (
+                            normalize_whatsapp_identifier,
+                        )
+                        _end_user_id = normalize_whatsapp_identifier(_end_user_id)
+                    except Exception:
+                        pass
+                agent._api_end_user_id = _end_user_id or None
             # Must-deliver notes for THIS turn ride the current user message
             # (api_content sidecar), never the system prompt: staged by
             # _handle_message_with_agent (auto-reset note, first-contact
